@@ -659,9 +659,10 @@ async def _debug_mirror_loop(
                             preview = p.get("preview", "")
                             buttons = p.get("buttons", [])
 
-                            txt = f"\U0001f514 <b>{html.escape(header)}</b>"
+                            txt = f"<blockquote>\U0001f514 <b>{html.escape(header)}</b>"
                             if preview:
                                 txt += f"\n<code>{html.escape(preview[:500])}</code>"
+                            txt += "</blockquote>"
 
                             if buttons:
                                 kb = _make_approval_keyboard(buttons)

@@ -65,7 +65,7 @@ STRUCTURED_PROGRESS_SCRIPT = r"""(() => {
         const action = (actionSpan.textContent || '').trim();
         if (!action) continue;
 
-        // Filename: span.inline-flex containing the file name text
+        // Filename: try span.inline-flex.break-all, then any inline-flex span
         const nameSpans = fg.querySelectorAll('span.inline-flex');
         let fileName = '';
         let lineRef = '';
@@ -79,9 +79,10 @@ STRUCTURED_PROGRESS_SCRIPT = r"""(() => {
             }
         }
         if (!fileName) {
-            // Fallback: look for any text that looks like a filename
+            // Broader fallback: parse filename from concatenated text
             const allText = (fg.textContent || '').trim();
-            const match = allText.match(/(?:Created|Analyzed|Modified|Deleted)\s*([\w._\/-]+)/i);
+            // Remove action word and diff counts to isolate filename
+            const match = allText.match(/(?:Created|Edited|Analyzed|Modified|Deleted|Wrote)\s*([\w._\/-]+(?:\.[\w]+)?)/i);
             if (match) fileName = match[1];
         }
         if (!fileName) continue;

@@ -101,13 +101,21 @@ def format_activity_log(progress: dict) -> str:
 def format_final_response(response_text: str) -> str:
     """Format the final AI response (Message 3).
 
-    Uses blockquote expandable so user can collapse long responses.
+    The response_text may contain Telegram HTML from html_to_telegram.
+    We strip tags and escape so it fits safely inside a blockquote.
     """
+    import re
+
     header = "\U0001f4ac <b>AI Response</b>\n"
 
+    # Strip any HTML tags from the converted response to get clean text
+    clean = re.sub(r"<[^>]+>", "", response_text)
+    clean = html.unescape(clean)  # Decode &lt; &gt; etc back
+    clean = clean.strip()
+
     max_body = 4096 - len(header) - 100
-    body = response_text[:max_body]
-    if len(response_text) > max_body:
+    body = _esc(clean[:max_body])
+    if len(clean) > max_body:
         body += "\n\n<i>... (truncated)</i>"
 
     return header + f"<blockquote expandable>{body}</blockquote>"
