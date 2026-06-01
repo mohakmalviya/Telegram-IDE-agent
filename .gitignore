@@ -10,3 +10,5 @@ build/
 .venv/
 venv/
 .teams/
+click_log*.jsonl
+click_analysis*.txt

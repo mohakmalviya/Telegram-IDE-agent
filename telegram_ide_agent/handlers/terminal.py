@@ -3,6 +3,8 @@ TEAM_001: Terminal command handlers.
 Handles /run, /git, /pip, /npm.
 """
 
+from pathlib import Path
+
 from aiogram import Router
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -13,8 +15,8 @@ from telegram_ide_agent.utils.formatting import escape_md, code_block, truncate
 
 router = Router(name="terminal")
 
-# Store pending dangerous commands: user_id -> command string
-_pending_commands: dict[int, str] = {}
+# Store pending dangerous commands with the cwd that was reviewed.
+_pending_commands: dict[int, dict[str, str | Path]] = {}
 
 
 @router.message(Command("run"))
@@ -33,7 +35,7 @@ async def cmd_run(
 
     # Safety check
     if executor.is_dangerous(command):
-        _pending_commands[user_id] = command
+        _pending_commands[user_id] = {"command": command, "cwd": cwd}
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="⚠️ Run anyway", callback_data="run:confirm"),
             InlineKeyboardButton(text="❌ Cancel", callback_data="run:cancel"),
@@ -54,14 +56,15 @@ async def cb_run_confirm(
 ) -> None:
     """Execute a previously confirmed dangerous command."""
     user_id = callback.from_user.id
-    command = _pending_commands.pop(user_id, None)
+    pending = _pending_commands.pop(user_id, None)
 
-    if not command:
+    if not pending:
         await callback.message.edit_text("❌ No pending command\\.", parse_mode="MarkdownV2")
         await callback.answer()
         return
 
-    cwd = user_cwd.get(user_id, file_manager.workspace_root)
+    command = str(pending["command"])
+    cwd = pending["cwd"]
     await callback.message.edit_text(f"⏳ Running: `{escape_md(command)}`", parse_mode="MarkdownV2")
     result = await executor.run(command, cwd)
 

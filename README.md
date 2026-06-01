@@ -1,181 +1,192 @@
-# 🚀 Telegram IDE Agent
+# Telegram IDE Agent
 
-A Telegram bot that lets you remotely operate your AI IDE (Antigravity, Cursor, VS Code, Windsurf) from anywhere — using the IDE's own AI models, zero API keys needed.
+A Telegram bot for operating a local AI IDE from your phone. It connects to Chromium-based IDEs through the Chrome DevTools Protocol (CDP), sends prompts to the IDE's own AI chat, streams progress back to Telegram, and exposes file, terminal, navigation, and screenshot commands.
 
-## How It Works
+The project is designed for maintainers who want a secure remote control surface for their development machine without adding another model API key.
 
-```
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│  Telegram    │  HTTP   │  This Bot    │   CDP   │  Your IDE    │
-│  (Phone)     │◄──────►│  (Python)    │◄──────►│  (Antigravity)│
-│              │ Bot API │              │WebSocket│              │
-└──────────────┘         └──────────────┘         └──────────────┘
+## What It Does
+
+```text
+Telegram chat -> Python bot -> CDP websocket -> local IDE chat panel
 ```
 
-1. You send a message in Telegram
-2. The bot receives it and connects to your IDE via **Chrome DevTools Protocol (CDP)**
-3. It injects your prompt into the IDE's chat input
-4. The IDE's AI processes it (using whatever model it's configured with)
-5. The bot reads the response from the IDE and sends it back to Telegram
-
-**No API keys needed** — the AI model is whatever your IDE subscription provides.
+1. You send a command or prompt in Telegram.
+2. The bot authorizes your Telegram user ID.
+3. File and terminal actions run inside `WORKSPACE_ROOT`.
+4. AI prompts are injected into the configured IDE chat panel through CDP.
+5. Results, progress updates, approval prompts, and screenshots are sent back to Telegram.
 
 ## Features
 
-- 📂 **File Operations** — Browse, read, edit, create, delete, upload/download files
-- 💻 **Terminal** — Execute shell commands remotely with timeout & safety checks
-- 🤖 **IDE AI Bridge** — Send prompts to Antigravity/Cursor/VS Code/Windsurf's AI
-- 📸 **Screenshots** — Capture the IDE window from Telegram
-- 🔒 **Secure** — User ID whitelist, path sandboxing, dangerous command confirmation
-- 🔍 **Search** — Grep-like search across your codebase
-- 🌳 **Tree View** — Visual directory tree
+- File operations: browse, read, edit, create, delete, upload, download, search, and tree view.
+- Terminal execution: run commands with timeouts and confirmation for dangerous patterns.
+- IDE AI bridge: send prompts to Antigravity, Cursor, VS Code, or Windsurf using the IDE's configured model.
+- Progress mirroring: track AI activity, files, commands, and final responses from Telegram.
+- IDE control: reconnect to CDP, inspect chat element detection, stop generation, and capture screenshots.
+- Security controls: Telegram user allowlist, path sandboxing, confirmation callbacks, and local-only CDP guidance.
+
+## Supported IDE Profiles
+
+| Profile | IDE | Status |
+| --- | --- | --- |
+| `antigravity` | Antigravity | Primary |
+| `cursor` | Cursor | Supported |
+| `vscode` | VS Code / Copilot Chat | Supported |
+| `windsurf` | Windsurf | Supported |
+
+Set the active profile with `IDE_PROFILE=<name>` in `.env`.
+
+## Requirements
+
+- Python 3.11 or newer
+- Telegram bot token from [BotFather](https://t.me/BotFather)
+- Your Telegram numeric user ID
+- A Chromium-based IDE launched with `--remote-debugging-port`
 
 ## Quick Start
 
-### 1. Prerequisites
-- Python 3.11+
-- A Telegram Bot Token ([@BotFather](https://t.me/BotFather))
-- An IDE with CDP support (Antigravity, Cursor, VS Code, etc.)
-
-### 2. Install
-
 ```bash
-cd Telegram_agent
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Linux/Mac
-pip install -r requirements.txt
+git clone https://github.com/mohakmalviya/Telegram-IDE-agent.git
+cd Telegram-IDE-agent
+python -m venv .venv
 ```
 
-### 3. Configure
+Activate the virtual environment:
 
-Edit `.env`:
+```powershell
+.venv\Scripts\activate
+```
+
+Or on macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Create your environment file:
+
+```bash
+cp .env.example .env
+```
+
+Configure `.env`:
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
-ALLOWED_USER_IDS=your_telegram_user_id
+ALLOWED_USER_IDS=123456789
 WORKSPACE_ROOT=/path/to/your/projects
-IDE_PROFILE=antigravity    # or: cursor, vscode, windsurf
+IDE_PROFILE=antigravity
+CDP_PORT=9222
+RESPONSE_TIMEOUT=120
+COMMAND_TIMEOUT=60
 ```
 
-### 4. Launch IDE with CDP
+Launch your IDE with CDP enabled:
 
-**Option A** — Use the included launcher:
-```bash
-start_antigravity.bat       # Windows
+```powershell
+start_antigravity.bat
 ```
 
-**Option B** — Launch manually:
+Or manually:
+
 ```bash
 Antigravity.exe --remote-debugging-port=9222
-# or for Cursor:
 Cursor.exe --remote-debugging-port=9222
-# or for VS Code:
 code --remote-debugging-port=9222
 ```
 
-### 5. Start the Bot
+Start the bot:
 
 ```bash
 python -m telegram_ide_agent.bot
 ```
 
-Open Telegram → find your bot → send `/start` 🎉
+Open Telegram, find your bot, and send `/start`.
 
 ## Commands
 
 | Command | Description |
-|---------|-------------|
-| **File Operations** | |
-| `/files` | List directory contents |
-| `/cat <file>` | Read file (with optional line range) |
-| `/edit <file>` | Interactive file editor |
-| `/touch <file>` | Create empty file |
-| `/mkdir <dir>` | Create directory |
-| `/rm <path>` | Delete (with confirmation) |
-| `/download <file>` | Download file as document |
-| `/upload` | Upload — send a document |
-| `/search <query>` | Search in files |
-| `/tree` | Directory tree view |
-| **Navigation** | |
-| `/cd <path>` | Change directory |
-| `/pwd` | Print working directory |
-| **Terminal** | |
-| `/run <cmd>` | Execute shell command |
-| `/git <args>` | Git shortcut |
-| `/pip <args>` | Pip shortcut |
-| `/npm <args>` | NPM shortcut |
-| **AI (via IDE)** | |
-| `/ai <prompt>` | Send prompt to IDE's AI |
-| `/ai_edit <file> <prompt>` | AI-powered file editing |
-| `/ai_explain <file>` | AI explains a file |
-| `/stop` | Stop current generation |
-| **IDE Control** | |
-| `/ide_status` | Connection status & diagnostics |
-| `/ide_connect` | Connect/reconnect to IDE |
-| `/ide_profile` | Show supported IDE profiles |
-| `/screenshot` | Capture IDE window |
+| --- | --- |
+| `/files` | List the current directory |
+| `/cat <file>` | Read a file, optionally with a line range |
+| `/edit <file>` | Start an interactive file edit flow |
+| `/touch <file>` | Create an empty file |
+| `/mkdir <dir>` | Create a directory |
+| `/rm <path>` | Delete a file or directory after confirmation |
+| `/download <file>` | Download a workspace file |
+| `/upload` | Show upload instructions |
+| `/search <query>` | Search text in files |
+| `/tree` | Show a directory tree |
+| `/cd <path>` | Change working directory |
+| `/pwd` | Show current working directory |
+| `/run <cmd>` | Execute a shell command |
+| `/git <args>` | Run a git command shortcut |
+| `/pip <args>` | Run a pip command shortcut |
+| `/npm <args>` | Run an npm command shortcut |
+| `/ai <prompt>` | Send a prompt to the IDE AI chat |
+| `/ai_edit <file> <prompt>` | Ask the IDE AI to edit a file |
+| `/ai_explain <file>` | Ask the IDE AI to explain a file |
+| `/model <name>` | Try to select an IDE model by name |
+| `/stop` | Stop current AI generation |
+| `/ide_status` | Show CDP and chat element diagnostics |
+| `/ide_connect` | Connect or reconnect to the IDE |
+| `/ide_profile` | List supported IDE profiles |
+| `/screenshot` | Capture the IDE window |
+| `/debug_on` | Mirror IDE progress to Telegram for debugging |
+| `/debug_off` | Stop the debug mirror |
 
-## Supported IDEs
+## Security Model
 
-| Profile | IDE | Status |
-|---------|-----|--------|
-| `antigravity` | Antigravity | ✅ Primary |
-| `cursor` | Cursor | ✅ Supported |
-| `vscode` | VS Code (Copilot Chat) | ✅ Supported |
-| `windsurf` | Windsurf | ✅ Supported |
+Telegram IDE Agent is powerful: it can read files, write files, execute commands, and control a local IDE. Run it only for yourself or a trusted team.
 
-Set your IDE in `.env` with `IDE_PROFILE=<name>`.
+- Access is limited to IDs in `ALLOWED_USER_IDS`.
+- File paths are resolved and checked against `WORKSPACE_ROOT`.
+- Uploaded files are written only after sandbox path resolution.
+- Delete confirmations use short-lived server-side tokens instead of raw callback paths.
+- Dangerous command confirmations store the reviewed command and working directory together.
+- CDP should stay bound to localhost unless you fully control the network.
 
-## Deployment (Docker)
+See [SECURITY.md](SECURITY.md) for reporting and operational guidance.
 
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-CMD ["python", "-m", "telegram_ide_agent.bot"]
+## Development
+
+Run the local checks:
+
+```bash
+python -m compileall telegram_ide_agent
+python -m unittest discover -s tests
 ```
 
-> **Note:** The IDE must be running on the same machine or network-accessible via CDP.
+The GitHub Actions workflow runs the same compile and unit-test checks on pushes and pull requests.
 
-## Security
+## Repository Hygiene
 
-- Only whitelisted Telegram user IDs can interact with the bot
-- All file operations are sandboxed to `WORKSPACE_ROOT`
-- Dangerous shell commands require inline confirmation
-- Path traversal attacks are blocked
-- CDP connection is local-only (127.0.0.1)
+The repository intentionally excludes local debug captures such as click logs, generated analysis files, virtual environments, caches, and `.env` secrets.
 
-## Architecture
+## Project Layout
 
-```
+```text
 telegram_ide_agent/
-├── bot.py              ← Entry point
-├── config.py           ← Environment config
-├── middleware/
-│   └── auth.py         ← User whitelist enforcement
-├── handlers/
-│   ├── navigation.py   ← /start, /help, /cd, /pwd
-│   ├── files.py        ← File operations
-│   ├── terminal.py     ← Shell execution
-│   └── ai_assistant.py ← AI commands + IDE control
-├── services/
-│   ├── cdp_manager.py  ← Low-level CDP WebSocket connection
-│   ├── ide_bridge.py   ← IDE chat UI interaction + profiles
-│   ├── ai_client.py    ← AI client routing through IDE
-│   ├── file_manager.py ← Async file ops + sandboxing
-│   └── executor.py     ← Subprocess execution
-└── utils/
-    ├── formatting.py   ← Telegram MarkdownV2 utilities
-    └── pagination.py   ← Inline keyboard pagination
+  bot.py                  # Entry point and dependency wiring
+  config.py               # Environment config loader
+  middleware/auth.py      # Telegram user allowlist
+  handlers/               # Telegram command handlers
+  services/               # CDP, IDE bridge, file manager, executor
+  utils/                  # Telegram formatting and pagination helpers
+tests/
+  test_security.py        # Security-focused unit tests
 ```
-
-## Inspiration
-
-Inspired by [LazyGravity](https://github.com/tokyoweb3/LazyGravity) — a Discord bot with the same CDP-bridge concept.
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
+
+## Inspiration
+
+Inspired by [LazyGravity](https://github.com/tokyoweb3/LazyGravity), a Discord bot built around the same CDP bridge concept.

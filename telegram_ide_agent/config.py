@@ -50,12 +50,20 @@ def load_config(env_path: str | None = None) -> Config:
     raw_ids = os.getenv("ALLOWED_USER_IDS", "").strip()
     if not raw_ids:
         raise ValueError("ALLOWED_USER_IDS is required. Set at least one Telegram user ID.")
-    allowed_user_ids = {int(uid.strip()) for uid in raw_ids.split(",") if uid.strip()}
+    try:
+        allowed_user_ids = {int(uid.strip()) for uid in raw_ids.split(",") if uid.strip()}
+    except ValueError as exc:
+        raise ValueError(
+            "ALLOWED_USER_IDS must be a comma-separated list of numeric Telegram user IDs."
+        ) from exc
 
     workspace_root = Path(os.getenv("WORKSPACE_ROOT", "/home/user/projects")).resolve()
 
     cdp_port_str = os.getenv("CDP_PORT", "").strip()
-    cdp_port = int(cdp_port_str) if cdp_port_str else None
+    try:
+        cdp_port = int(cdp_port_str) if cdp_port_str else None
+    except ValueError as exc:
+        raise ValueError("CDP_PORT must be empty or a numeric TCP port.") from exc
 
     return Config(
         bot_token=bot_token,

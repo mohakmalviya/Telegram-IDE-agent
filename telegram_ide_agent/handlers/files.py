@@ -4,6 +4,7 @@ Handles /files, /cat, /edit, /touch, /mkdir, /rm, /download, /upload, /search, /
 """
 
 import io
+from secrets import token_urlsafe
 from pathlib import Path
 
 from aiogram import Router, F
@@ -30,6 +31,9 @@ router = Router(name="files")
 
 # Temporary state for edit flow: user_id -> {file, step, start, end}
 _edit_state: dict[int, dict] = {}
+
+# Temporary state for delete confirmations: user_id -> token -> path
+_delete_state: dict[int, dict[str, Path]] = {}
 
 
 # ─── /files (or /ls) ──────────────────────────────────────────────
@@ -344,8 +348,10 @@ async def cmd_rm(message: Message, file_manager: FileManager, user_cwd: dict) ->
         return
 
     kind = "directory" if filepath.is_dir() else "file"
+    token = token_urlsafe(8)
+    _delete_state.setdefault(user_id, {})[token] = filepath
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🗑️ Yes, delete", callback_data=f"rm:confirm:{target}"),
+        InlineKeyboardButton(text="🗑️ Yes, delete", callback_data=f"rm:confirm:{token}"),
         InlineKeyboardButton(text="❌ Cancel", callback_data="rm:cancel"),
     ]])
 
@@ -361,14 +367,19 @@ async def cb_rm_confirm(
     callback: CallbackQuery, file_manager: FileManager, user_cwd: dict
 ) -> None:
     """Confirm file deletion."""
-    target = callback.data.replace("rm:confirm:", "")
     user_id = callback.from_user.id
-    cwd = user_cwd.get(user_id, file_manager.workspace_root)
+    token = callback.data.replace("rm:confirm:", "")
+    filepath = _delete_state.get(user_id, {}).pop(token, None)
+
+    if not filepath:
+        await callback.message.edit_text("❌ Delete request expired\\.", parse_mode="MarkdownV2")
+        await callback.answer()
+        return
 
     try:
-        filepath = file_manager.resolve(target, cwd)
+        display = filepath.relative_to(file_manager.workspace_root)
         await file_manager.delete(filepath)
-        await callback.message.edit_text(f"🗑️ Deleted: `{escape_md(target)}`", parse_mode="MarkdownV2")
+        await callback.message.edit_text(f"🗑️ Deleted: `{escape_md(str(display))}`", parse_mode="MarkdownV2")
     except Exception as e:
         await callback.message.edit_text(f"❌ Error: {escape_md(str(e))}", parse_mode="MarkdownV2")
     await callback.answer()
@@ -377,6 +388,7 @@ async def cb_rm_confirm(
 @router.callback_query(F.data == "rm:cancel")
 async def cb_rm_cancel(callback: CallbackQuery) -> None:
     """Cancel file deletion."""
+    _delete_state.pop(callback.from_user.id, None)
     await callback.message.edit_text("✅ Deletion cancelled\\.", parse_mode="MarkdownV2")
     await callback.answer()
 
@@ -434,11 +446,8 @@ async def handle_document_upload(
         await message.answer("❌ Could not read the uploaded file\\.", parse_mode="MarkdownV2")
         return
 
-    filepath = cwd / doc.file_name
-
     try:
-        # Security check
-        file_manager.resolve(doc.file_name, cwd)
+        filepath = file_manager.resolve(doc.file_name, cwd)
     except PathSecurityError:
         await message.answer("⛔ Access denied\\.", parse_mode="MarkdownV2")
         return
